@@ -1,0 +1,32 @@
+<mujoco model="cartpole">
+  <compiler angle="radian" coordinate="local"/>
+  <option gravity="0 0 -9.8" timestep="0.02"/>
+
+  <default>
+    <joint damping="0"/>
+    <geom friction="0 0 0"/>
+  </default>
+
+  <worldbody>
+    <!-- Ground -->
+    <geom type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"/>
+
+    <!-- Cart body -->
+    <body name="cart" pos="0 0 0.1">
+      <joint name="slide" type="slide" axis="1 0 0"/>
+      <geom type="box" size="0.2 0.1 0.1" rgba="0 0 1 1" mass="1.0"/>
+
+      <!-- Pole body -->
+      <body name="pole" pos="0 0 0.1">
+        <joint name="hinge" type="hinge" axis="0 1 0"/>
+        <!-- Approximated: pole is 1m long, with mass 0.1kg concentrated near tip -->
+        <geom type="capsule" fromto="0 0 0 0 0 2" size="0.01" rgba="1 0 0 1" mass="0.1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Binary force applied to the cart (±10 N) -->
+    <motor name="cart_motor" joint="slide" ctrlrange="-10 10" gear="1"/>
+  </actuator>
+</mujoco>
