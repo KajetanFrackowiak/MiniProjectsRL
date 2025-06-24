@@ -18,7 +18,16 @@ class MuJoCoCartPoleEnv(gym.Env):
         self.viewer = None
         self.step_count = 0
 
+        self.np_random = None
+
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        return [seed]
+
     def reset(self, seed=None, options=None):
+        if seed is not None:
+            self.seed(seed)
+            
         self.data.qpos[:] = 0
         self.data.qvel[:] = 0
         self.step_count = 0
