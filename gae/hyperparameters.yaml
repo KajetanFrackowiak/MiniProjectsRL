@@ -1,0 +1,303 @@
+# GAE Training Hyperparameters Configuration
+# Environment Codes:
+# 1: PongNoFrameskip-v4 (Atari)
+# 2: CartPole-v1 (Discrete Control)
+# 3: Pendulum-v1 (Continuous Control)
+# 4: Ant-v4 (MuJoCo Locomotion)
+# 5: Humanoid-v5 (MuJoCo Humanoid)
+# 6: CartPole_own (Custom MuJoCo)
+
+# Algorithm Codes:
+# 1: TRPO (Trust Region Policy Optimization)
+# 2: PPO (Proximal Policy Optimization)
+
+# ========== TRPO HYPERPARAMETERS ==========
+trpo:
+  # Environment 1: PongNoFrameskip-v4
+  pong:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 4000
+    max_iters: 2000  # Increased for better convergence
+    value_lr: 0.0005
+    policy_lr: 0.0003
+    max_kl: 0.015
+    value_epochs: 10
+    damping: 0.1
+    cg_steps: 10
+    backtrack_ratio: 0.5
+    max_backtracks: 15
+    
+  # Environment 2: CartPole-v1
+  cartpole:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 5000
+    max_iters: 300
+    value_lr: 0.003
+    policy_lr: 0.001
+    max_kl: 0.01
+    value_epochs: 8
+    damping: 0.01
+    cg_steps: 10
+    backtrack_ratio: 0.5
+    max_backtracks: 10
+    
+  # Environment 3: Pendulum-v1
+  pendulum:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 8000
+    max_iters: 500
+    value_lr: 0.005
+    policy_lr: 0.001
+    max_kl: 0.02
+    value_epochs: 15
+    damping: 0.01
+    cg_steps: 15
+    backtrack_ratio: 0.8
+    max_backtracks: 10
+    
+  # Environment 4: Ant-v4
+  ant:
+    gamma: 0.995
+    lambda_: 0.95
+    max_timesteps_per_batch: 25000
+    max_iters: 1000
+    value_lr: 0.0003
+    policy_lr: 0.0003
+    max_kl: 0.01
+    value_epochs: 10
+    damping: 0.1
+    cg_steps: 15
+    backtrack_ratio: 0.5
+    max_backtracks: 15
+    
+  # Environment 5: Humanoid-v5
+  humanoid:
+    gamma: 0.995
+    lambda_: 0.95
+    max_timesteps_per_batch: 50000
+    max_iters: 2000
+    value_lr: 0.0003
+    policy_lr: 0.0003
+    max_kl: 0.015
+    value_epochs: 10
+    damping: 0.1
+    cg_steps: 20
+    backtrack_ratio: 0.5
+    max_backtracks: 20
+    
+  # Environment 6: CartPole_own
+  cartpole_own:
+    gamma: 0.99
+    lambda_: 0.9
+    max_timesteps_per_batch: 8000
+    max_iters: 500
+    value_lr: 0.003
+    policy_lr: 0.001
+    max_kl: 0.015
+    value_epochs: 12
+    damping: 0.01
+    cg_steps: 12
+    backtrack_ratio: 0.7
+    max_backtracks: 10
+
+# ========== PPO HYPERPARAMETERS ==========
+ppo:
+  # Environment 1: PongNoFrameskip-v4
+  pong:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 4000
+    max_iters: 2000  # Increased for better Pong performance
+    value_lr: 0.001
+    policy_lr: 0.00025
+    clip_ratio: 0.1
+    value_epochs: 4
+    policy_epochs: 4
+    minibatch_size: 256
+    target_kl: 0.01
+    entropy_coef: 0.01
+    value_loss_coef: 0.5
+    
+  # Environment 2: CartPole-v1
+  cartpole:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 5000
+    max_iters: 300
+    value_lr: 0.005
+    policy_lr: 0.003
+    clip_ratio: 0.2
+    value_epochs: 4
+    policy_epochs: 4
+    minibatch_size: 128
+    target_kl: 0.01
+    entropy_coef: 0.0
+    value_loss_coef: 0.5
+    
+  # Environment 3: Pendulum-v1
+  pendulum:
+    gamma: 0.99
+    lambda_: 0.95
+    max_timesteps_per_batch: 8000
+    max_iters: 500
+    value_lr: 0.01
+    policy_lr: 0.003
+    clip_ratio: 0.2
+    value_epochs: 8
+    policy_epochs: 8
+    minibatch_size: 256
+    target_kl: 0.02
+    entropy_coef: 0.0
+    value_loss_coef: 1.0
+    
+  # Environment 4: Ant-v4
+  ant:
+    gamma: 0.995
+    lambda_: 0.95
+    max_timesteps_per_batch: 25000
+    max_iters: 1000
+    value_lr: 0.0003
+    policy_lr: 0.0003
+    clip_ratio: 0.2
+    value_epochs: 10
+    policy_epochs: 10
+    minibatch_size: 512
+    target_kl: 0.01
+    entropy_coef: 0.0
+    value_loss_coef: 0.5
+    
+  # Environment 5: Humanoid-v5
+  humanoid:
+    gamma: 0.995
+    lambda_: 0.95
+    max_timesteps_per_batch: 50000
+    max_iters: 2000
+    value_lr: 0.0003
+    policy_lr: 0.0003
+    clip_ratio: 0.2
+    value_epochs: 10
+    policy_epochs: 10
+    minibatch_size: 1024
+    target_kl: 0.015
+    entropy_coef: 0.0
+    value_loss_coef: 0.5
+    
+  # Environment 6: CartPole_own
+  cartpole_own:
+    gamma: 0.99
+    lambda_: 0.9
+    max_timesteps_per_batch: 8000
+    max_iters: 500
+    value_lr: 0.005
+    policy_lr: 0.003
+    clip_ratio: 0.2
+    value_epochs: 6
+    policy_epochs: 6
+    minibatch_size: 256
+    target_kl: 0.015
+    entropy_coef: 0.0
+    value_loss_coef: 1.0
+
+# ========== ENVIRONMENT-SPECIFIC SETTINGS ==========
+environment_settings:
+  # Network architectures
+  networks:
+    pong:
+      policy_type: "cnn_discrete"
+      value_type: "cnn"
+      frame_stack: 4
+      
+    cartpole:
+      policy_type: "linear"
+      value_type: "linear"
+      
+    pendulum:
+      policy_type: "linear"
+      value_type: "linear"
+      
+    ant:
+      policy_type: "mlp"
+      value_type: "mlp"
+      
+    humanoid:
+      policy_type: "mlp"
+      value_type: "mlp"
+      
+    cartpole_own:
+      policy_type: "linear"
+      value_type: "linear"
+
+  # Reward scaling and normalization
+  reward_settings:
+    pong:
+      reward_scale: 1.0
+      normalize_rewards: false
+      
+    cartpole:
+      reward_scale: 1.0
+      normalize_rewards: false
+      
+    pendulum:
+      reward_scale: 1.0
+      normalize_rewards: true
+      
+    ant:
+      reward_scale: 1.0
+      normalize_rewards: true
+      
+    humanoid:
+      reward_scale: 1.0
+      normalize_rewards: true
+      
+    cartpole_own:
+      reward_scale: 1.0
+      normalize_rewards: false
+
+# ========== GENERAL SETTINGS ==========
+general:
+  device: "auto"  # "cuda", "cpu", or "auto"
+  wandb_project: "gae"
+  checkpoint_dir: "./checkpoints"
+  # Note: seed is now handled by command line args (default: random)
+  
+  # Logging settings
+  log_frequency: 1  # Log every N iterations
+  save_frequency: 10  # Save checkpoint every N iterations
+  eval_frequency: 50  # Evaluate policy every N iterations
+  eval_episodes: 10  # Number of episodes for evaluation
+  
+  # Training stability
+  gradient_clip: 0.5
+  obs_normalization: false
+  value_clipping: false
+
+# ========== RECOMMENDED PARAMETER COMBINATIONS ==========
+recommendations:
+  fast_training:
+    # For faster but potentially less stable training
+    lambda_: 0.9
+    value_lr_multiplier: 2.0
+    batch_size_multiplier: 1.5
+    
+  stable_training:
+    # For more stable but slower training  
+    lambda_: 0.95
+    value_lr_multiplier: 0.7
+    max_kl_multiplier: 0.7
+    
+  exploration_focused:
+    # For environments requiring more exploration
+    entropy_coef_multiplier: 2.0
+    clip_ratio_multiplier: 1.2
+    
+# ========== ENVIRONMENT-SPECIFIC NOTES ==========
+notes:
+  pong: "Atari game with sparse rewards. Benefits from frame stacking and longer episodes."
+  cartpole: "Simple discrete control. Quick to train, good for debugging."
+  pendulum: "Continuous control with dense rewards. Benefits from higher value learning rates."
+  ant: "Complex locomotion. Requires larger batch sizes and careful hyperparameter tuning."
+  humanoid: "Most complex environment. Very sensitive to hyperparameters."
+  cartpole_own: "Custom implementation. Similar to cartpole but continuous actions."
