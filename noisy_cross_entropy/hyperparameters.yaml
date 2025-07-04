@@ -1,5 +1,35 @@
-CartPole-v1:
-  population_size: 30
-  num_generations: 20
-  elite_ratio: 0.2
-  num_episodes: 5
+Noisy_CrossEntropy:
+  CartPole-v1:
+    population_size: 30
+    num_generations: 100
+    elite_ratio: 0.2
+    num_episodes: 5
+    solve_threshold: 495
+
+  Pendulum-v1:
+    population_size: 30
+    num_generations: 100
+    elite_ratio: 0.2
+    num_episodes: 5 
+    solve_threshold: -200
+
+  MountainCar-v0:
+    population_size: 30
+    num_generations: 100
+    elite_ratio: 0.2
+    num_episodes: 5
+    solve_threshold: -110
+
+  Acrobot-v1:
+    population_size: 30
+    num_generations: 100
+    elite_ratio: 0.2
+    num_episodes: 5
+    solve_threshold: -100
+
+  LunarLander-v3:
+    population_size: 30
+    num_generations: 100
+    elite_ratio: 0.2
+    num_episodes: 5
+    solve_threshold: 200
