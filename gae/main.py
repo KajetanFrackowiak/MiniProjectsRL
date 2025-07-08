@@ -67,7 +67,6 @@ def collect_episodes(args, env, policy, value_fn, target_timesteps, gamma, devic
     observations, actions, rewards, dones, values, log_probs = [], [], [], [], [], []
     episode_returns = []
     episode_return = 0
-    episode_length = 0
     timesteps_collected = 0
 
     obs = env.reset()[0]
@@ -144,14 +143,12 @@ def collect_episodes(args, env, policy, value_fn, target_timesteps, gamma, devic
         log_probs.append(log_prob.item())
 
         episode_return += reward
-        episode_length += 1
         timesteps_collected += 1
 
         obs = observation
         if done:
             episode_returns.append(episode_return)
             episode_return = 0
-            episode_length = 0
             obs = env.reset()[0]
 
     # Append value for last step for bootstrapping
