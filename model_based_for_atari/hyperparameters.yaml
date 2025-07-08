@@ -1,0 +1,22 @@
+
+# SimPLe hyperparameters example
+buffer_capacity: 100000
+init_steps: 10000
+num_iterations: 15
+wm_batch_size: 64
+wm_steps: 15000
+wm_lr: 0.0003
+ss_prob: 0.5
+loss_clip: 0.10
+bit_dropout: 0.2
+ppo_epochs: 4
+rollout_length: 50
+num_envs: 16
+real_steps_per_iter: 10000
+policy_lr: 0.0003
+clip_ratio: 0.2
+policy_epochs: 4
+minibatch_size: 256
+value_loss_coef: 0.5
+target_kl: 0.01
+num_bits: 32
