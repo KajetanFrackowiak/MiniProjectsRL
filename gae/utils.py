@@ -39,9 +39,9 @@ class FrameStacker:
 
     def reset(self, seed=None):
         if seed is not None:
-            obs, info = self.env.reset()
-        else:
             obs, info = self.env.reset(seed=seed)
+        else:
+            obs, info = self.env.reset()
         processed_obs = self.preprocess_fn(obs)
         for _ in range(self.k):
             self.frames.append(processed_obs)
