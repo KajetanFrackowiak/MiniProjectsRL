@@ -109,3 +109,40 @@ class DQNAgent:
         self.target_net.eval()
         print(f"Model loaded from. Resuming with steps_done: {self.steps_done}")
 
+
+class DoubleDQNAgent(DQNAgent):
+    def learn(self):
+        if len(self.memory) < self.batch_size:
+            return None
+        
+        states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        rewards = rewards.to(self.device)
+        next_states = next_states.to(self.device)
+        dones = dones.to(self.device)
+
+        # The input tensor: self.policy_net(states) has two dimensions: (batch_size, num_actions)
+        # But actions has one dimension: (batch_size,), actions.unsqueeze(1) -> (batch_size, 1) lets .gather()
+        # pick exactly one action index per batch element along dimension 1. It outputs (batch_size, 1) tensor. But we need (batch_size,) tensor in downstream code like loss computation.
+        # So we use .squeeze(1) to remove the second dimension.
+        current_q_values = self.policy_net(states).gather(dim=1, index=actions.unsqueeze(1)).squeeze(1)
+
+        with torch.no_grad():
+            # Instead of using target_net directly, we use policy_net to select actions
+            next_actions = self.policy_net(next_states).max(1)[1].unsqueeze(1)
+            # And then use target_net to get Q-values for those actions
+            next_q_values_target = self.target_net(next_states).gather(dim=1, index=next_actions).squeeze(1)
+        next_q_values_target[dones.bool()] = 0.0
+        
+        expected_q_values = rewards + (self.gamma * next_q_values_target)
+        loss = F.smooth_l1_loss(current_q_values, expected_q_values)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        if self.steps_done % self.target_update_freq == 0:
+            self.update_target_network()
+        
+        return loss.item()
