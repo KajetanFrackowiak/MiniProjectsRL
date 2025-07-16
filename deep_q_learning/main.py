@@ -9,7 +9,7 @@ import yaml
 import secrets
 import argparse
 from tqdm import tqdm
-from agent import DQNAgent, DoubleDQNAgent
+from agent import DQNAgent, DoubleDQNAgent, PrioritizedReplayAgent
 from utils import FrameStacker, find_latest_checkpoint
 
 def load_hyperparameters():
@@ -19,24 +19,29 @@ def load_hyperparameters():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=int, choices=[1], required=True,
+    parser.add_argument("--env", type=int, choices=[1,2,3], required=True,
                         help=
                         "1: PongNoFrameskip-v4"
                         "2: BreakoutNoFrameskip-v4"
                         "3: SeaquestNoFrameskip-v4")
     parser.add_argument("--seed", type=int, default=secrets.randbelow(2**32))
-    parser.add_argument("--method", type=int, choices=[1, 2], required=True,
+    parser.add_argument("--method", type=int, choices=[1, 2, 3], required=True,
                         help=
                         "1: DQN"
-                        "2: Double DQN")
+                        "2: Double DQN"
+                        "3: Prioritized Replay DQN")
     parser.add_argument("--load_model", type=str, default="none",
                         help="Path to the model checkpoint to load, or 'none' to skip loading")
 
     args = parser.parse_args()
     env_names = {1: "PongNoFrameskip-v4", 2: "BreakoutNoFrameskip-v4", 3: "SeaquestNoFrameskip-v4"}
     ENV_NAME = env_names[args.env] if args.env in env_names else "None"
-    method_names = {1: "DQN", 2: "Double DQN"}
-    METHOD_NAME = method_names[args.method] if args.method in method_names else "None"
+    if args.method == 1:
+        METHOD_NAME = "DQN"
+    elif args.method == 2:
+        METHOD_NAME = "Double DQN"
+    elif args.method == 3:
+        METHOD_NAME = "Prioritized Replay DQN"
     
 
     config = load_hyperparameters() 
@@ -58,6 +63,11 @@ def main():
     LOG_INTERVAL = config["LOG_INTERVAL"]
     SAVE_MODEL_INTERVAL = config["SAVE_MODEL_INTERVAL"]
     CHECKPOINT_DIR = config["CHECKPOINT_DIR"]
+    ALPHA = config["ALPHA"]
+    BETA_START = config["BETA_START"]
+    BETA_FRAMES = config["BETA_FRAMES"]
+    MODE = config["MODE"]
+
 
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -80,10 +90,7 @@ def main():
 
 
     if METHOD_NAME == "DQN":
-        agent_class = DQNAgent
-    elif METHOD_NAME == "Double DQN":
-        agent_class = DoubleDQNAgent
-    agent = agent_class(
+        agent = DQNAgent(
         input_dims=INPUT_DIMS_AGENT,
         num_actions=NUM_ACTIONS,
         learning_rate=LEARNING_RATE,
@@ -95,8 +102,40 @@ def main():
         batch_size=BATCH_SIZE,
         target_update_freq=TARGET_UPDATE_FREQ_FRAMES,
     )
+    elif METHOD_NAME == "Double DQN":
+        agent = DoubleDQNAgent(
+        input_dims=INPUT_DIMS_AGENT,
+        num_actions=NUM_ACTIONS,
+        learning_rate=LEARNING_RATE,
+        gamma=GAMMA,
+        epsilon_start=EPSILON_START,
+        epsilon_end=EPSILON_END,
+        epsilon_decay_steps=EPSILON_DECAY_STEPS,
+        buffer_size=BUFFER_SIZE,
+        batch_size=BATCH_SIZE,
+        target_update_freq=TARGET_UPDATE_FREQ_FRAMES,
+    )
+    elif METHOD_NAME == "Prioritized Replay DQN":
+        agent = PrioritizedReplayAgent(
+            input_dims=INPUT_DIMS_AGENT,
+            num_actions=NUM_ACTIONS,
+            learning_rate=LEARNING_RATE,
+            gamma=GAMMA,
+            epsilon_start=EPSILON_START,
+            epsilon_end=EPSILON_END,
+            epsilon_decay_steps=EPSILON_DECAY_STEPS,
+            buffer_size=BUFFER_SIZE,
+            batch_size=BATCH_SIZE,
+            target_update_freq=TARGET_UPDATE_FREQ_FRAMES,
+            alpha=ALPHA,
+            beta_start=BETA_START,
+            beta_frames=BETA_FRAMES,
+            mode=MODE,
+        )
 
-    # --- Wandb Initialization ---
+
+    
+       # --- Wandb Initialization ---
     wandb.init(
         project=f"{METHOD_NAME}_{ENV_NAME}_seed_{args.seed}",
         config={

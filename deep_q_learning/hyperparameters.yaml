@@ -17,3 +17,9 @@ LOG_INTERVAL: 10
 SAVE_MODEL_INTERVAL: 100
 CHECKPOINT_DIR: "checkpoints"
 MODEL_BASE_NAME: "PongNoFrameskip-v4_dqn"
+
+# Hyperparameters for prioritized experience replay
+ALPHA: 0.6  # Prioritization exponent
+BETA_START: 0.4  # Initial value for importance sampling weight
+BETA_FRAMES: 1000000  # Number of frames over which beta is annealed
+MODE: "proportional"  # or "rank_based"
