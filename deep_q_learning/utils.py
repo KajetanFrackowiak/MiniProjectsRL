@@ -8,6 +8,7 @@ from collections import deque
 import os
 import re
 
+
 def preprocess_frame(frame, new_size=(84, 84)):
     """
     Convert frame to grayscale and resize
@@ -20,7 +21,7 @@ def preprocess_frame(frame, new_size=(84, 84)):
     elif frame.ndim == 3 and frame.shape[-1] == 1:
         frame = frame.squeeze(-1)
     else:
-        raise ValueError('Frame must be 2 or 3 dimensional')
+        raise ValueError("Frame must be 2 or 3 dimensional")
 
     frame = resize(frame, new_size, anti_aliasing=True)
     return frame.astype(np.float32)
@@ -89,12 +90,17 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        state, action, reward, next_state, done = zip(*random.sample(self.buffer, batch_size))
-        return (torch.stack(state),
-                torch.stack(action).squeeze(),  # Squeeze to remove extra dim if action is single
-                torch.stack(reward).squeeze(),
-                torch.stack(next_state),
-                torch.stack(done).squeeze()
+        state, action, reward, next_state, done = zip(
+            *random.sample(self.buffer, batch_size)
+        )
+        return (
+            torch.stack(state),
+            torch.stack(
+                action
+            ).squeeze(),  # Squeeze to remove extra dim if action is single
+            torch.stack(reward).squeeze(),
+            torch.stack(next_state),
+            torch.stack(done).squeeze(),
         )
 
     def __len__(self):
@@ -103,15 +109,17 @@ class ReplayBuffer:
 
 class PrioritizedReplayBuffer:
     def __init__(self, capacity, alpha=0.6, mode="proportional"):
-        assert mode in ["proportional", "rank_based"], "Invalid mode for PrioritizedReplayBuffer"
+        assert mode in ["proportional", "rank_based"], (
+            "Invalid mode for PrioritizedReplayBuffer"
+        )
         self.capacity = capacity
         self.alpha = alpha
         self.mode = mode
 
         self.buffer = []
-        self.pos = 0 # Current position in the buffer
+        self.pos = 0  # Current position in the buffer
         self.priorities = np.zeros((capacity,), dtype=np.float32)
-    
+
     def push(self, state, action, reward, next_state, done, priority=None):
         state = torch.tensor(state, dtype=torch.float32)
         next_state = torch.tensor(next_state, dtype=torch.float32)
@@ -141,10 +149,10 @@ class PrioritizedReplayBuffer:
             return self._sample_proportional(batch_size, beta)
         elif self.mode == "rank_based":
             return self._sample_rank_based(batch_size, beta)
-    
+
     def _sample_proportional(self, batch_size, beta=0.4):
-        prios = self.prorities[:len(self.buffer)]
-        probs = prios ** self.alpha
+        prios = self.priorities[: len(self.buffer)]
+        probs = prios**self.alpha
         probs /= probs.sum()
 
         # Where p is the probability of each sample
@@ -153,10 +161,12 @@ class PrioritizedReplayBuffer:
         weights /= weights.max()
 
         return self._gather_samples(indices, weights)
-    
+
     def _sample_rank_based(self, batch_size, beta=0.4):
-        prios = self.priorities[:len(self.buffer)]
-        ranks = prios.argsort()[::-1]  # Sort in descending order because higher priority means more likely to be sampled
+        prios = self.priorities[: len(self.buffer)]
+        ranks = prios.argsort()[
+            ::-1
+        ]  # Sort in descending order because higher priority means more likely to be sampled
         rank_weights = 1.0 / (np.arange(len(ranks)) + 1)
         probs = rank_weights / rank_weights.sum()
 
@@ -166,18 +176,20 @@ class PrioritizedReplayBuffer:
         weights /= weights.max()
 
         return self._gather_samples(indices, weights)
-    
+
     def _gather_samples(self, indices, weights):
+        # function to gather samples based on indices
         batch = [self.buffer[idx] for idx in indices]
-        states, actions, rewards, next_states, dones, _ = zip(*batch)
+        states, actions, rewards, next_states, dones, max_priorities = zip(*batch)
 
         return (
-            torch.stack(states), # (batch_size, num_stacked_frames, height, width)
-            torch.stack(actions).squeeze(), # (batch_size, 1) -> (batch_size,)
-            torch.stack(rewards).squeeze(), # (batch_size, 1) -> (batch_size,)
-            torch.stack(next_states), # (batch_size, num_stacked_frames, height, width)
-            torch.stack(dones).squeeze(), # (batch_size, 1) -> (batch_size,)
-            torch.tensor(weights, dtype=torch.float32) # (batch_size, 1)
+            torch.stack(states),  # (batch_size, num_stacked_frames, height, width)
+            torch.stack(actions).squeeze(),  # (batch_size, 1) -> (batch_size,)
+            torch.stack(rewards).squeeze(),  # (batch_size, 1) -> (batch_size,)
+            torch.stack(next_states),  # (batch_size, num_stacked_frames, height, width)
+            torch.stack(dones).squeeze(),  # (batch_size, 1) -> (batch_size,)
+            torch.tensor(indices, dtype=torch.int64),  # (batch_size,)
+            torch.tensor(weights, dtype=torch.float32),  # (batch_size,)
         )
 
     def __len__(self):
@@ -186,5 +198,15 @@ class PrioritizedReplayBuffer:
     def max_priority(self):
         if len(self.buffer) == 0:
             return 1.0
-        return self.priorities.max() 
+        return self.priorities.max()
     
+    def update_priorities(self, indices, priorities):
+        """
+        Update the priorities of the samples at the given indices.
+        """
+        for idx, priority in zip(indices, priorities):
+            self.priorities[idx] = priority
+            self.buffer[idx] = (*self.buffer[idx][:-1], priority)
+        # Ensure priorities are normalized
+        self.priorities /= self.priorities.max() if self.priorities.max() > 0 else 1.0
+        return self.priorities

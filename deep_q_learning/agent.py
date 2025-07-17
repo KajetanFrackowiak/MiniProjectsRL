@@ -3,7 +3,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 import numpy as np
-from models import DQN
+from models import DQN, DuelingDQN
 from utils import ReplayBuffer, PrioritizedReplayBuffer
 
 
@@ -232,8 +232,9 @@ class PrioritizedReplayAgent(DoubleDQNAgent):
         rewards = rewards.to(self.device)
         next_states = next_states.to(self.device)
         dones = dones.to(self.device)
-        weights = torch.tensor(weights, dtype=torch.float32).to(self.device)
-
+        
+        # Instead of using torch.tensor(weights, dtype=torch.float32), we use torch.clone().detach() to ensure that the weights are not affected by the gradients.
+        weights = weights.clone().detach().to(self.device)
         current_q_values = (
             self.policy_net(states).gather(dim=1, index=actions.unsqueeze(1)).squeeze(1)
         )
@@ -272,3 +273,94 @@ class PrioritizedReplayAgent(DoubleDQNAgent):
             1.0,
             self.beta_start + frame_idx * (1.0 - self.beta_start) / self.beta_frames,
         )
+
+
+class PrioritizedDuelingAgent(PrioritizedReplayAgent):
+    def __init__(
+        self,
+        input_dims,
+        num_actions,
+        learning_rate=1e-4,
+        gamma=0.99,
+        epsilon_start=1.0,
+        epsilon_end=0.01,
+        epsilon_decay_steps=100000,
+        buffer_size=100000,
+        batch_size=64,
+        target_update_freq=1000,
+        alpha=0.6,
+        beta_start=0.4,
+        beta_frames=100000,
+        mode="proportional",
+    ):
+        super().__init__(
+            input_dims,
+            num_actions,
+            learning_rate,
+            gamma,
+            epsilon_start,
+            epsilon_end,
+            epsilon_decay_steps,
+            buffer_size,
+            batch_size,
+            target_update_freq,
+            alpha,
+            beta_start,
+            beta_frames,
+            mode,
+        )
+        self.policy_net = DuelingDQN(input_dims[0], num_actions).to(self.device)
+        self.target_net = DuelingDQN(input_dims[0], num_actions).to(self.device)
+
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+
+        self.optimizer = optim.RMSprop(self.policy_net.parameters(), lr=learning_rate)
+
+    def learn(self):
+        if len(self.memory) < self.batch_size:
+            return None
+
+        beta = self.beta_by_frame(self.steps_done)
+        states, actions, rewards, next_states, dones, indices, weights = (
+            self.memory.sample(self.batch_size, beta=beta)
+        )
+
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        rewards = rewards.to(self.device)
+        next_states = next_states.to(self.device)
+        dones = dones.to(self.device)
+        weights = torch.tensor(weights, dtype=torch.float32).to(self.device)
+
+        current_q_values = (
+            self.policy_net(states).gather(dim=1, index=actions.unsqueeze(1)).squeeze(1)
+        )
+
+        with torch.no_grad():
+            next_actions = self.policy_net(next_states).max(1)[1].unsqueeze(1)
+            next_q_values_target = (
+                self.target_net(next_states)
+                .gather(dim=1, index=next_actions)
+                .squeeze(1)
+            )
+            next_q_values_target[dones.bool()] = 0.0
+
+        expected_q_values = rewards + (self.gamma * next_q_values_target)
+
+        # Compute TD error
+        td_errors = current_q_values - expected_q_values
+        loss = (weights * td_errors.pow(2)).mean()
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=10)
+        self.optimizer.step()
+
+        new_priorities = td_errors.abs().detach().cpu().numpy() + 1e-5
+        self.memory.update_priorities(indices, new_priorities)
+
+        if self.steps_done % self.target_update_freq == 0:
+            self.update_target_network()
+
+        return loss.item()

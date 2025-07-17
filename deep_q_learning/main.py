@@ -9,7 +9,7 @@ import yaml
 import secrets
 import argparse
 from tqdm import tqdm
-from agent import DQNAgent, DoubleDQNAgent, PrioritizedReplayAgent
+from agent import DQNAgent, DoubleDQNAgent, PrioritizedReplayAgent, PrioritizedDuelingAgent
 from utils import FrameStacker, find_latest_checkpoint
 
 def load_hyperparameters():
@@ -25,11 +25,12 @@ def main():
                         "2: BreakoutNoFrameskip-v4"
                         "3: SeaquestNoFrameskip-v4")
     parser.add_argument("--seed", type=int, default=secrets.randbelow(2**32))
-    parser.add_argument("--method", type=int, choices=[1, 2, 3], required=True,
+    parser.add_argument("--method", type=int, choices=[1, 2, 3, 4], required=True,
                         help=
                         "1: DQN"
                         "2: Double DQN"
-                        "3: Prioritized Replay DQN")
+                        "3: Prioritized Replay DQN"
+                        "4: Prioritized Dueling DQN")
     parser.add_argument("--load_model", type=str, default="none",
                         help="Path to the model checkpoint to load, or 'none' to skip loading")
 
@@ -42,6 +43,8 @@ def main():
         METHOD_NAME = "Double DQN"
     elif args.method == 3:
         METHOD_NAME = "Prioritized Replay DQN"
+    elif args.method == 4:
+        METHOD_NAME = "Prioritized Dueling DQN"
     
 
     config = load_hyperparameters() 
@@ -132,7 +135,24 @@ def main():
             beta_frames=BETA_FRAMES,
             mode=MODE,
         )
-
+    elif METHOD_NAME == "Prioritized Dueling DQN":
+        agent = PrioritizedDuelingAgent(
+            input_dims=INPUT_DIMS_AGENT,
+            num_actions=NUM_ACTIONS,
+            learning_rate=LEARNING_RATE,
+            gamma=GAMMA,
+            epsilon_start=EPSILON_START,
+            epsilon_end=EPSILON_END,
+            epsilon_decay_steps=EPSILON_DECAY_STEPS,
+            buffer_size=BUFFER_SIZE,
+            batch_size=BATCH_SIZE,
+            target_update_freq=TARGET_UPDATE_FREQ_FRAMES,
+            alpha=ALPHA,
+            beta_start=BETA_START,
+            beta_frames=BETA_FRAMES,
+            mode=MODE,
+        )
+    
 
     
        # --- Wandb Initialization ---
