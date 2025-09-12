@@ -1,0 +1,17 @@
+__pycache__/
+wandb/
+*.csv
+*.zip
+*.pth
+*.pkl
+*.npy
+*.aux
+*.db_latexmk
+*.fls
+*.log
+*.pdf
+*.gz
+*.tex
+*.ttf
+
+

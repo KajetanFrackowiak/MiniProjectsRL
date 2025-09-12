@@ -1,0 +1,15 @@
+# Expert hyperparameters
+expert_learning_rate: 0.0003
+expert_gamma: 0.99
+expert_n_steps: 512
+expert_epochs: 10
+expert_total_timesteps: 3000000
+
+# Student hyperparameters
+student_epochs: 100
+student_iterations: 1000
+student_learning_rate: 0.001
+student_rollouts_per_iteration: 10
+student_beta_decay: 0.9
+
+batch_size: 64

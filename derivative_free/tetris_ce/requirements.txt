@@ -1,0 +1,4 @@
+gymnasium[atari]
+numpy
+opencv-python
+matplotlib

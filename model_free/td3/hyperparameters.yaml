@@ -1,0 +1,48 @@
+general:
+  max_timesteps: 1000  # timesteps per episode
+  eval_freq: 100
+
+# Training steps per environment (following TD3 paper)
+environment_steps:
+  hopper: 1000000    # 1M steps (1000 episodes)
+  walker2d: 1000000  # 1M steps (1000 episodes) 
+  halfcheetah: 1000000  # Temporary: 1M steps for quick testing
+  ant: 3000000       # 3M steps (3000 episodes)
+  humanoid: 10000000 # 10M steps (10000 episodes)
+
+ddpg:
+  learning_rate: 0.0003  # 3e-4 as in DDPG paper
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256       # Increased from 64 for better stability
+  buffer_size: 1000000
+  ou_mu: 0.0
+  ou_theta: 0.15
+  ou_sigma: 0.2         # Original paper value
+  warmup_steps: 10000   # Random actions for initial exploration
+
+td3:
+  learning_rate: 0.0003  # 3e-4 as in TD3 paper
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256
+  buffer_size: 1000000
+  policy_noise: 0.2
+  noise_clip: 0.5
+  policy_freq: 2
+  exploration_noise: 0.1  # Standard deviation for exploration noise
+  warmup_steps: 10000     # Reduced from 25k - still enough for exploration
+
+sac:
+  learning_rate: 0.0003
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256
+  buffer_size: 1000000
+  alpha: 0.2
+  automatic_entropy_tuning: true
+  warmup_steps: 10000     # Random actions for initial exploration
+
+logging:
+  save_models: true
+  save_dir: "models/"
