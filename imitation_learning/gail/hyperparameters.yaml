@@ -1,0 +1,7 @@
+policy_learning_rate: 0.0003
+disc_learning_rate: 0.001
+policy_eta_min: 0.0000001
+disc_eta_min: 0.000001
+epochs: 1000
+episodes_per_epoch: 10
+checkpoint_interval: 100
