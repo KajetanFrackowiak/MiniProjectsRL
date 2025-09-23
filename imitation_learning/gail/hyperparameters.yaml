@@ -5,3 +5,10 @@ disc_eta_min: 0.000001
 epochs: 1000
 episodes_per_epoch: 10
 checkpoint_interval: 100
+discriminator_update_freq: 5
+
+clip_ratio: 0.2
+policy_epochs: 4
+ppo_minibatch_size: 64
+entropy_coef: 0.01
+target_kl: 0.01

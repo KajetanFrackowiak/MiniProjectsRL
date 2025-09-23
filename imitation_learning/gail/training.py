@@ -16,11 +16,18 @@ class Trainer:
         disc_optimizer,
         policy_scheduler,
         disc_scheduler,
+        ppo_update_fn,
+        clip_ratio,
+        policy_epochs,
+        ppo_minibatch_size,
+        entropy_coef,
+        target_kl,
         epochs,
         episodes_per_epoch,
         checkpoint_interval,
         device,
         seed,
+        discriminator_update_freq=3,
         project_name="GAIL",
         checkpoint_dir="checkpoints",
     ):
@@ -32,12 +39,22 @@ class Trainer:
         self.disc_optimizer = disc_optimizer
         self.policy_scheduler = policy_scheduler
         self.disc_scheduler = disc_scheduler
+
+        self.ppo_update_fn = ppo_update_fn
+        self.clip_ratio = clip_ratio
+        self.policy_epochs = policy_epochs
+        self.ppo_minibatch_size = ppo_minibatch_size
+        self.entropy_coef = entropy_coef
+        self.target_kl = target_kl
+
         self.epochs = epochs
         self.episodes_per_epoch = episodes_per_epoch
         self.checkpoint_interval = checkpoint_interval
         self.device = device
         self.seed = seed
         self.checkpoint_dir = checkpoint_dir
+        self.discriminator_update_freq = discriminator_update_freq
+        self.step_counter = 0
 
         self.training_metrics = {
             "epochs": [],
@@ -75,8 +92,8 @@ class Trainer:
                     ).unsqueeze(0)
                 )
                 action = expert_action.squeeze(0).cpu().numpy()
-                next_state, reward, done, truncated, _ = self.env.step(action)
-                done = done or truncated
+                next_state, reward, terminated, truncated, _ = self.env.step(action)
+                done = terminated or truncated
                 total_reward += reward
                 state = next_state
                 steps += 1
@@ -96,7 +113,7 @@ class Trainer:
         self.discriminator.train()
 
         with torch.no_grad():
-            policy_output = self.policy_network(state)
+            policy_output = self.policy_network(state)  # [1, action_dim]
             if self.policy_network.discrete:
                 policy_action_disc = F.softmax(policy_output, dim=-1)
             else:
@@ -112,31 +129,39 @@ class Trainer:
         disc_loss = -torch.mean(
             torch.log(D_expert + 1e-8) + torch.log(1 - D_policy_disc + 1e-8)
         )
-        self.disc_optimizer.zero_grad()
-        disc_loss.backward()
-        self.disc_optimizer.step()
 
+        # Only update discriminator every discriminator_update_freq steps
+        if self.step_counter % self.discriminator_update_freq == 0:
+            self.disc_optimizer.zero_grad()
+            disc_loss.backward()
+            self.disc_optimizer.step()
+        else:
+            # Still compute disc_loss for logging, but don't update
+            disc_loss = disc_loss.detach()
+
+        # Generate action and get log probability for PPO
         policy_output = self.policy_network(state)
         if self.policy_network.discrete:
-            policy_action_policy = F.softmax(policy_output, dim=-1)
+            dist = torch.distributions.Categorical(F.softmax(policy_output, dim=-1))
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
         else:
             mean, std = policy_output
             dist = torch.distributions.Normal(mean, std)
-            policy_action_policy = dist.rsample()
+            action = dist.rsample()
+            log_prob = dist.log_prob(action).sum(-1)  #  [1, action_dim] -> [1,]
 
-        D_policy_policy = self.discriminator(state, policy_action_policy)
-        policy_loss = -torch.mean(torch.log(D_policy_policy + 1e-8))
-        self.policy_optimizer.zero_grad()
-        policy_loss.backward()
-        self.policy_optimizer.step()
-
-        with torch.no_grad():
-            gail_reward = torch.log(D_policy_policy + 1e-8)
+        D_policy = self.discriminator(state, action)
+        gail_reward = torch.log(D_policy + 1e-8)
+        advantage = gail_reward.detach()
+        old_log_prob = log_prob.detach()
 
         return {
             "gail_reward": gail_reward.mean().item(),
-            "policy_loss": policy_loss.item(),
             "disc_loss": disc_loss.item(),
+            "action": action.detach(),
+            "advantage": advantage,
+            "old_log_prob": old_log_prob,
         }
 
     def train_one_episode(self):
@@ -152,36 +177,75 @@ class Trainer:
             "steps": 0,
         }
 
+        episode_observations = []
+        episode_actions = []
+        episode_advantages = []
+        episode_old_log_probs = []
+
         while not done:
             state_tensor = torch.tensor(
                 state, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
             step_stats = self.train_step(state_tensor)
+            self.step_counter += 1
 
-            with torch.no_grad():
-                policy_output = self.policy_network(state_tensor)
-                if self.policy_network.discrete:
-                    probs = F.softmax(policy_output, dim=-1)
-                    action_idx = torch.multinomial(probs, 1)
-                    action = action_idx.squeeze().cpu().numpy()
-                else:
-                    mean, std = policy_output
-                    dist = torch.distributions.Normal(mean, std)
-                    action = dist.sample().squeeze(0).cpu().numpy()
+            # Collect data for PPO update at end of episode
+            episode_observations.append(state_tensor)
+            episode_actions.append(step_stats["action"])
+            episode_advantages.append(step_stats["advantage"])
+            episode_old_log_probs.append(step_stats["old_log_prob"])
 
-            next_state, env_reward, done, truncated, _ = self.env.step(action)
+            # Use the action from train_step for environment interaction
+            action_for_env = step_stats["action"].squeeze(0).cpu().numpy()
+
+            next_state, env_reward, done, truncated, _ = self.env.step(action_for_env)
             done = done or truncated
 
             episode_stats["env_reward_total"] += env_reward
             episode_stats["env_reward_per_step"] += env_reward
             episode_stats["gail_reward"] += step_stats["gail_reward"]
-            episode_stats["policy_loss"] += step_stats["policy_loss"]
             episode_stats["disc_loss"] += step_stats["disc_loss"]
             episode_stats["steps"] += 1
             state = next_state
- 
-        for k in ["env_reward_per_step", "gail_reward", "policy_loss", "disc_loss"]:
-            episode_stats[k] /= episode_stats["steps"]
+
+        # Convert episode data to tensors for PPO update
+        if episode_observations:
+            observations_tensor = torch.cat(
+                episode_observations, dim=0
+            )  #  [1, obs_dim] -> [episode_length, obs_dim]
+            actions_tensor = torch.cat(
+                episode_actions, dim=0
+            )  #  [1, action_dim] -> [episode_length, action_dim]
+            advantages_tensor = torch.cat(
+                episode_advantages, dim=0
+            )  #  [1,] -> [episode_length,]
+            old_log_probs_tensor = torch.cat(
+                episode_old_log_probs, dim=0
+            )  #  [1,] -> [episode_length,]
+
+            # Perform PPO update on the entire episode
+            policy_loss = self.ppo_update_fn(
+                policy=self.policy_network,
+                policy_optimizer=self.policy_optimizer,
+                observations=observations_tensor,
+                actions=actions_tensor,
+                advantages=advantages_tensor,
+                old_log_probs=old_log_probs_tensor,
+                clip_ratio=self.clip_ratio,
+                policy_epochs=self.policy_epochs,
+                ppo_minibatch_size=self.ppo_minibatch_size,
+                entropy_coef=self.entropy_coef,
+                target_kl=self.target_kl,
+            )
+            episode_stats["policy_loss"] = policy_loss
+        else:
+            episode_stats["policy_loss"] = 0.0
+
+        # Average per-step metrics
+        for k in ["env_reward_per_step", "gail_reward", "disc_loss"]:
+            if episode_stats["steps"] > 0:
+                episode_stats[k] /= episode_stats["steps"]
+
         return episode_stats
 
     def train(self):
@@ -225,7 +289,6 @@ class Trainer:
             self.policy_scheduler.step()
             self.disc_scheduler.step()
 
-            # Store paper-style metrics
             self.training_metrics["epochs"].append(epoch)
             self.training_metrics["policy_losses"].append(avg_stats["policy_loss"])
             self.training_metrics["disc_losses"].append(avg_stats["disc_loss"])
@@ -247,15 +310,16 @@ class Trainer:
             }
             wandb.log(log_data)
 
-            pbar.set_postfix(
-                total_reward=f"{avg_total_reward:.1f}",
-                normalized_perf=f"{normalized_perf:.3f}",
-                env_reward_step=f"{avg_stats['env_reward_per_step']:.2f}",
-                ep_len=f"{avg_episode_length:.0f}",
-                policy_loss=f"{avg_stats['policy_loss']:.4f}",
-                disc_loss=f"{avg_stats['disc_loss']:.4f}"
+            print(
+                f"Epoch {epoch:3d}: "
+                f"total_reward={avg_total_reward:.1f}, "
+                f"normalized_perf={normalized_perf:.3f}, "
+                f"env_reward_step={avg_stats['env_reward_per_step']:.2f}, "
+                f"ep_len={avg_episode_length:.0f}, "
+                f"policy_loss={avg_stats['policy_loss']:.4f}, "
+                f"disc_loss={avg_stats['disc_loss']:.4f}, "
+                f"disc_updates={self.step_counter // self.discriminator_update_freq}"
             )
-
 
             if epoch % self.checkpoint_interval == 0:
                 os.makedirs(self.checkpoint_dir, exist_ok=True)
