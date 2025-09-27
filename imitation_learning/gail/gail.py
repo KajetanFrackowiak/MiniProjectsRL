@@ -30,14 +30,11 @@ class PolicyNetwork(nn.Module):
         else:
             mean = self.mean_head(x)
             std = torch.exp(self.log_std)
-            # print(f"Mean: {mean}, Std: {std}")  # Debugging line
             if torch.isnan(mean).any() or torch.isnan(std).any():
                 print("NaN detected in mean or std!")
                 mean = mean.nan_to_num(0.0)
                 std = std.nan_to_num(1.0)
-            std = torch.clamp(
-                std, 1e-6, 1.0
-            )  # Prevent std from being too small or too large
+            std = torch.clamp(std, 1e-6, 1.0)
             return mean, std
 
 
@@ -81,7 +78,7 @@ def ppo_update(
     actions = actions.detach()
     advantages = advantages.detach()
     old_log_probs = old_log_probs.detach()
-    
+
     batch_size = observations.shape[0]
     total_policy_loss = 0.0
     num_updates = 0
@@ -126,29 +123,20 @@ def ppo_update(
 
             # Total policy loss
             batch_total_loss = policy_loss + entropy_loss
-            total_policy_loss += (
-                policy_loss.item()
-            )  # Track just the policy loss component
+            total_policy_loss += policy_loss.item()
             num_updates += 1
 
             # Update policy
             policy_optimizer.zero_grad()
             batch_total_loss.backward()
 
-            # Gradient clipping (optional but recommended)
             torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
 
             policy_optimizer.step()
 
-            # Early stopping based on KL divergence
             with torch.no_grad():
                 kl_div = (mb_old_log_probs - new_log_probs).mean()
                 if kl_div > target_kl * 1.5:
-                    # print(
-                    #     f"Early stopping at epoch {epoch} due to high KL divergence: {kl_div:.4f}"
-                    # )
-                    # Return average loss so far
                     return total_policy_loss / num_updates if num_updates > 0 else 0.0
 
-    # Return average policy loss across all updates
     return total_policy_loss / num_updates if num_updates > 0 else 0.0

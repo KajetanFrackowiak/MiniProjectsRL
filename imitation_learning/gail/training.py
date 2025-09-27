@@ -28,7 +28,6 @@ class Trainer:
         device,
         seed,
         discriminator_update_freq=3,
-        project_name="GAIL",
         checkpoint_dir="checkpoints",
     ):
         self.env = env
@@ -71,8 +70,6 @@ class Trainer:
         self.expert_baseline = self._calculate_expert_baseline()
         self.random_baseline = 0.0  # Hopper random baseline
 
-        wandb.init(project=project_name)
-
     def _calculate_expert_baseline(self):
         """Calculate expert performance baseline from demonstrations."""
         expert_rewards = []
@@ -113,7 +110,7 @@ class Trainer:
         self.discriminator.train()
 
         with torch.no_grad():
-            policy_output = self.policy_network(state)  # [1, action_dim]
+            policy_output = self.policy_network(state)
             if self.policy_network.discrete:
                 policy_action_disc = F.softmax(policy_output, dim=-1)
             else:
@@ -130,16 +127,13 @@ class Trainer:
             torch.log(D_expert + 1e-8) + torch.log(1 - D_policy_disc + 1e-8)
         )
 
-        # Only update discriminator every discriminator_update_freq steps
         if self.step_counter % self.discriminator_update_freq == 0:
             self.disc_optimizer.zero_grad()
             disc_loss.backward()
             self.disc_optimizer.step()
         else:
-            # Still compute disc_loss for logging, but don't update
             disc_loss = disc_loss.detach()
 
-        # Generate action and get log probability for PPO
         policy_output = self.policy_network(state)
         if self.policy_network.discrete:
             dist = torch.distributions.Categorical(F.softmax(policy_output, dim=-1))
@@ -149,7 +143,7 @@ class Trainer:
             mean, std = policy_output
             dist = torch.distributions.Normal(mean, std)
             action = dist.rsample()
-            log_prob = dist.log_prob(action).sum(-1)  #  [1, action_dim] -> [1,]
+            log_prob = dist.log_prob(action).sum(-1)
 
         D_policy = self.discriminator(state, action)
         gail_reward = torch.log(D_policy + 1e-8)
@@ -189,41 +183,30 @@ class Trainer:
             step_stats = self.train_step(state_tensor)
             self.step_counter += 1
 
-            # Collect data for PPO update at end of episode
             episode_observations.append(state_tensor)
             episode_actions.append(step_stats["action"])
             episode_advantages.append(step_stats["advantage"])
             episode_old_log_probs.append(step_stats["old_log_prob"])
 
-            # Use the action from train_step for environment interaction
             action_for_env = step_stats["action"].squeeze(0).cpu().numpy()
 
-            next_state, env_reward, done, truncated, _ = self.env.step(action_for_env)
-            done = done or truncated
+            next_state, env_reward, terminated, truncated, _ = self.env.step(
+                action_for_env
+            )
+            done = terminated or truncated
 
             episode_stats["env_reward_total"] += env_reward
-            episode_stats["env_reward_per_step"] += env_reward
             episode_stats["gail_reward"] += step_stats["gail_reward"]
             episode_stats["disc_loss"] += step_stats["disc_loss"]
             episode_stats["steps"] += 1
             state = next_state
 
-        # Convert episode data to tensors for PPO update
         if episode_observations:
-            observations_tensor = torch.cat(
-                episode_observations, dim=0
-            )  #  [1, obs_dim] -> [episode_length, obs_dim]
-            actions_tensor = torch.cat(
-                episode_actions, dim=0
-            )  #  [1, action_dim] -> [episode_length, action_dim]
-            advantages_tensor = torch.cat(
-                episode_advantages, dim=0
-            )  #  [1,] -> [episode_length,]
-            old_log_probs_tensor = torch.cat(
-                episode_old_log_probs, dim=0
-            )  #  [1,] -> [episode_length,]
+            observations_tensor = torch.cat(episode_observations, dim=0)
+            actions_tensor = torch.cat(episode_actions, dim=0)
+            advantages_tensor = torch.cat(episode_advantages, dim=0)
+            old_log_probs_tensor = torch.cat(episode_old_log_probs, dim=0)
 
-            # Perform PPO update on the entire episode
             policy_loss = self.ppo_update_fn(
                 policy=self.policy_network,
                 policy_optimizer=self.policy_optimizer,
@@ -241,15 +224,25 @@ class Trainer:
         else:
             episode_stats["policy_loss"] = 0.0
 
-        # Average per-step metrics
-        for k in ["env_reward_per_step", "gail_reward", "disc_loss"]:
+        if episode_stats["steps"] > 0:
+            episode_stats["env_reward_per_step"] = (
+                episode_stats["env_reward_total"] / episode_stats["steps"]
+            )
+
+        for k in ["gail_reward", "disc_loss"]:
             if episode_stats["steps"] > 0:
                 episode_stats[k] /= episode_stats["steps"]
 
         return episode_stats
 
     def train(self):
-        pbar = tqdm(range(self.epochs), desc="Epochs")
+        training_history = {
+            "avg_step_rewards": [],
+            "avg_policy_losses": [],
+            "avg_disc_losses": [],
+        }
+
+        pbar = tqdm(range(1, self.epochs), desc="Epochs")
         for epoch in pbar:
             all_episode_stats = []
             epoch_total_rewards = []
@@ -261,18 +254,14 @@ class Trainer:
                 epoch_total_rewards.append(stats["env_reward_total"])
                 epoch_lengths.append(stats["steps"])
 
-            # Calculate average stats for this epoch (per-step metrics)
             avg_stats = {
                 k: sum(s[k] for s in all_episode_stats) / len(all_episode_stats)
                 for k in all_episode_stats[0]
                 if k not in ["steps", "env_reward_total"]
             }
 
-            # Calculate episode-level metrics
             avg_total_reward = sum(epoch_total_rewards) / len(epoch_total_rewards)
             avg_episode_length = sum(epoch_lengths) / len(epoch_lengths)
-
-            # Calculate normalized performance (paper metric)
             normalized_perf = (
                 max(
                     0.0,
@@ -289,23 +278,20 @@ class Trainer:
             self.policy_scheduler.step()
             self.disc_scheduler.step()
 
-            self.training_metrics["epochs"].append(epoch)
-            self.training_metrics["policy_losses"].append(avg_stats["policy_loss"])
-            self.training_metrics["disc_losses"].append(avg_stats["disc_loss"])
-            self.training_metrics["env_rewards_per_step"].append(
-                avg_stats["env_reward_per_step"]
-            )
-            self.training_metrics["gail_rewards"].append(avg_stats["gail_reward"])
-            self.training_metrics["total_episode_rewards"].append(avg_total_reward)
-            self.training_metrics["episode_lengths"].append(avg_episode_length)
-            self.training_metrics["normalized_performance"].append(normalized_perf)
+            current_policy_lr = self.policy_optimizer.param_groups[0]["lr"]
+            current_disc_lr = self.disc_optimizer.param_groups[0]["lr"]
 
-            # Enhanced logging
+            training_history["avg_step_rewards"].append(avg_stats["env_reward_per_step"])
+            training_history["avg_policy_losses"].append(avg_stats["policy_loss"])
+            training_history["avg_disc_losses"].append(avg_stats["disc_loss"])
+
             log_data = {
                 "epoch": epoch,
                 "avg_episode_length": avg_episode_length,
                 "total_episode_reward": avg_total_reward,
                 "normalized_performance": normalized_perf,
+                "policy_lr": current_policy_lr,
+                "disc_lr": current_disc_lr,
                 **avg_stats,
             }
             wandb.log(log_data)
@@ -318,7 +304,8 @@ class Trainer:
                 f"ep_len={avg_episode_length:.0f}, "
                 f"policy_loss={avg_stats['policy_loss']:.4f}, "
                 f"disc_loss={avg_stats['disc_loss']:.4f}, "
-                f"disc_updates={self.step_counter // self.discriminator_update_freq}"
+                f"policy_lr={current_policy_lr:.5f}, ",
+                f"disc_lr={current_disc_lr:.4f}",
             )
 
             if epoch % self.checkpoint_interval == 0:
@@ -329,10 +316,9 @@ class Trainer:
                         "discriminator": self.discriminator.state_dict(),
                         "policy_optimizer": self.policy_optimizer.state_dict(),
                         "disc_optimizer": self.disc_optimizer.state_dict(),
-                        "training_metrics": self.training_metrics,
                         "epoch": epoch,
                     },
                     f"checkpoints/checkpoint_epoch_{epoch}_seed_{self.seed}.pth",
                 )
 
-        return self.training_metrics
+        return training_history

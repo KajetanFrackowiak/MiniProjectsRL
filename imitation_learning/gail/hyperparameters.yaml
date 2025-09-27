@@ -1,11 +1,14 @@
+project_name: "GAIL"
+
 policy_learning_rate: 0.0003
 disc_learning_rate: 0.001
-policy_eta_min: 0.0000001
-disc_eta_min: 0.000001
+policy_eta_min: 0.00005   
+disc_eta_min: 0.0001       
 epochs: 1000
+
 episodes_per_epoch: 10
 checkpoint_interval: 100
-discriminator_update_freq: 5
+discriminator_update_freq: 10
 
 clip_ratio: 0.2
 policy_epochs: 4
