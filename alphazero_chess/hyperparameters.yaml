@@ -1,0 +1,18 @@
+num_iterations: 100
+games_per_iteration: 10
+
+mcts_simulations: 100
+
+learning_rate: 0.001
+batch_size: 128
+train_steps_per_iteration: 500
+
+num_blocks: 6
+
+scheduler_T_max: 100
+scheduler_eta_min: 0.0001
+scheduler_interval: 10
+
+replay_buffer_size: 10000
+
+checkpoint_interval: 10
