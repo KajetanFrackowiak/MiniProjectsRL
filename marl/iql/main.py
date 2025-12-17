@@ -6,7 +6,7 @@ import torch.optim as optim
 import numpy as np
 import random
 import os
-from mpe2 import simple_adversary_v3, simple_crypto_v3, simple_world_comm_v3
+from mpe2 import simple_spread_v3, simple_speaker_listener_v4, simple_adversary_v3
 
 from utils import load_hyperparameters, save_stats, plot, save_metadata
 from q_network import QNetwork
@@ -21,7 +21,11 @@ def main():
         "--env",
         type=str,
         default="simple_adversary_v3",
-        choices=["simple_adversary_v3", "simple_world_comm_v3", "simple_crypto_v3"],
+        choices=[
+            "simple_adversary_v3",
+            "simple_speaker_listener_v4",
+            "simple_spread_v3",
+        ],
     )
     args = parser.parse_args()
 
@@ -32,8 +36,8 @@ def main():
     # Use parallel_env() for parallel multi-agent environment
     env = {
         "simple_adversary_v3": simple_adversary_v3.parallel_env(),
-        "simple_world_comm_v3": simple_world_comm_v3.parallel_env(),
-        "simple_crypto_v3": simple_crypto_v3.parallel_env(),
+        "simple_world_comm_v3": simple_speaker_listener_v4.parallel_env(),
+        "simple_crypto_v3": simple_spread_v3.parallel_env(),
     }[args.env]
 
     torch.manual_seed(seed)
@@ -60,7 +64,7 @@ def main():
             gamma=config["gamma"],
             buffer_size=config["buffer_size"],
             batch_size=config["batch_size"],
-            tau=config["tau"],  # Polyak averaging coefficient
+            target_update_freq=config["target_update_freq"],
             device=device,
         )
         optimizer = optim.Adam(

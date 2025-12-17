@@ -1,14 +1,13 @@
 batch_size: 64
 buffer_size: 100000
-learning_rate: 0.0001  # Increased back slightly with Polyak averaging
+learning_rate: 0.00005
 eta_min: 0.000001
 gamma: 0.99
 epsilon_start: 1.0
 epsilon_end: 0.1
-epsilon_decay: 500
-target_update: 1  # Using Polyak averaging (soft updates every step)
-tau: 0.005  # Polyak averaging coefficient (0.5% of new weights)
-num_episodes: 1000
+epsilon_decay: 2000
+target_update_freq: 1000
+num_episodes: 5000
 max_steps_per_episode: 200
 eval_interval: 50
 checkpoint_interval: 100

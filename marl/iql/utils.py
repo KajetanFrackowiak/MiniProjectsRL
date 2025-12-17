@@ -26,7 +26,7 @@ def load_stats(filepath):
     return stats
 
 def save_metadata(model, config, seed, filepath):
-    
+    # p.numel() gives the number of elements in the tensor
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     non_trainable_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
     total_params = trainable_params + non_trainable_params

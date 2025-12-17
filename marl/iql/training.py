@@ -53,6 +53,7 @@ class Trainer:
         total_loss = 0.0
         loss_count = 0
 
+        # all(done.values) checks if all agents are done
         while not all(done.values()):
             actions = {a: self.agents[a].act(obs[a], eps) for a in self.env.agents}
 
@@ -60,11 +61,13 @@ class Trainer:
             done = {a: terminations[a] or truncations[a] for a in self.env.agents}
 
             for a in self.env.agents:
-                # Clip rewards to the range [-1, 1]
+                # Clip rewards to the range [-1, 1] for stability
                 clipped_reward = max(min(rewards[a], 1.0), -1.0)
+                # Each agent stores its own experience in its replay buffer
                 self.agents[a].store(
                     obs[a], actions[a], clipped_reward, next_obs[a], done[a]
                 )
+                # Per-agent Q-learning update (inside train_step method)
                 loss = self.agents[a].train_step()
                 if loss is not None:
                     total_loss += loss
