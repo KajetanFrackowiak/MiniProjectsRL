@@ -1,6 +1,7 @@
 import tensorflow as tf
 import keras
 from mpe2 import simple_spread_v3, simple_speaker_listener_v4, simple_adversary_v3
+from smac.env import StarCraft2Env
 import wandb
 import argparse
 import secrets
@@ -21,11 +22,15 @@ def main():
         "--env",
         type=str,
         required=True,
-        help="simple_spread_v3, simple_speaker_listener_v4, simple_adversary_v3",
+        help="MPE: simple_spread_v3, simple_speaker_listener_v4, simple_adversary_v3"
+        "SMAC: 3m, 8m, 3s5z",
     )
     args = parser.parse_args()
 
     config = load_hyperparameters("hyperparameters.yaml")
+    seed = secrets.randbelow(2**32)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
 
     if args.env == "simple_spread_v3":
         env = simple_spread_v3.parallel_env(max_cycles=config["max_cycles"])
@@ -33,42 +38,51 @@ def main():
         env = simple_speaker_listener_v4.parallel_env(max_cycles=config["max_cycles"])
     elif args.env == "simple_adversary_v3":
         env = simple_adversary_v3.parallel_env(max_cycles=config["max_cycles"])
+    elif args.env in ["3m", "8m", "3s5z"]:
+        env = StarCraft2Env(map_name=args.env, seed=seed)
     else:
-        raise ValueError(
-            f"Unknown environment: {args.env}. Choose from: simple_spread_v3, simple_speaker_listener_v4, simple_adversary_v3"
-        )
+        raise ValueError(f"Unsupported environment: {args.env}")
 
-    max_steps_per_episode = config["max_cycles"]
-    total_train_steps = (
-        config["num_episodes"] * max_steps_per_episode // config["scheduler_frequency"]
-    )
+    if args.env in [
+        "simple_spread_v3",
+        "simple_speaker_listener_v4",
+        "simple_adversary_v3",
+    ]:
+        env.reset(seed=seed)
+
+    if args.env == "simple_spread_v3" or args.env == "simple_speaker_listener_v4":
+        num_episodes = config["num_episode_simple_spread_and_speaker"]
+    elif args.env == "simple_adversary_v3":
+        num_episodes = config["num_episode_simple_adversary"]
+    elif args.env == "3m":
+        num_episodes = config["num_episode_3m"]
+    elif args.env == "8m":
+        num_episodes = config["num_episode_8m"]
+    elif args.env == "3s5z":
+        num_episodes = config["num_episode_3s5z"]
+
+    if args.env in ["3m", "8m", "3s5z"]:
+        env_info = env.get_env_info()
+        num_agents = env_info["n_agents"]
+        agent_ids = list(range(num_agents))
+        obs_size = env.get_obs_size()
+        obs_dims = [obs_size] * num_agents
+        act_dim = env_info["n_actions"]
+        state_dim = obs_size * num_agents
+        episode_limit = env_info["episode_limit"]
+        total_train_steps = num_episodes * episode_limit
+    else:
+        agent_ids = list(env.observation_spaces.keys())
+        num_agents = len(agent_ids)
+        obs_dims = [env.observation_space(agent_id).shape[0] for agent_id in agent_ids]
+        act_dim = env.action_space(agent_ids[0]).n
+        state_dim = sum(obs_dims)
+        total_train_steps = num_episodes * config["max_cycles"]
 
     lr_schedule = keras.optimizers.schedules.CosineDecay(
         config["learning_rate"], decay_steps=total_train_steps, alpha=config["alpha"]
     )
     optimizer = keras.optimizers.Adam(learning_rate=lr_schedule)
-
-    seed = secrets.randbelow(2**32)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-
-    agent_ids = (
-        env.agents if hasattr(env, "agents") else list(env.observation_spaces.keys())
-    )
-    num_agents = len(agent_ids)
-
-    obs_dims = [env.observation_space(agent_id).shape[0] for agent_id in agent_ids]
-    act_dim = env.action_space(agent_ids[0]).n
-
-    test_obs_dict, _ = env.reset()
-    test_observations = [np.array(test_obs_dict[agent_id]) for agent_id in agent_ids]
-    test_state = np.concatenate(test_observations)
-    state_dim = test_state.shape[0]
-
-    print(f"Environment: {args.env}")
-    print(
-        f"Agents: {num_agents}, Obs dims: {obs_dims}, Act dim: {act_dim}, State dim: {state_dim}"
-    )
 
     agent = VDNAgent(
         num_agents=num_agents,
@@ -98,12 +112,13 @@ def main():
     else:
         print("Training from scratch")
 
-    wandb.init(project="VDN", name=f"{args.env}_seed_{seed}", mode="disabled")
+    wandb.init(project="VDN", name=f"{args.env}_seed_{seed}", config=config)
     print("Starting training...")
 
     trainer = Trainer(
         env=env,
         agent=agent,
+        seed=seed,
         optimizer=optimizer,
         epsilon_start=config["epsilon_start"],
         epsilon_end=config["epsilon_end"],
@@ -112,7 +127,7 @@ def main():
         checkpoint_freq=config["checkpoint_freq"],
     )
 
-    train_stats = trainer.train(num_episodes=config["num_episodes"])
+    train_stats = trainer.train(num_episodes=num_episodes)
 
     train_stats = {
         "env_name": args.env,

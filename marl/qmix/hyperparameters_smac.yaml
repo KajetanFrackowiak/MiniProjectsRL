@@ -1,0 +1,23 @@
+# Hyperparameters optimized for StarCraft II (SMAC) environments
+# Default values work well for 3m (simplest map)
+# For 8m: increase buffer_size to 8000, num_episodes to 15000
+# For 3s5z: increase buffer_size to 10000, num_episodes to 20000, mixer sizes to 128/256
+
+batch_size: 32
+buffer_size: 5000  # Original PyMARL value
+learning_rate: 0.0005
+eta_min: 0.000001
+gamma: 0.99
+epsilon_start: 1.0
+epsilon_end: 0.05
+epsilon_decay_steps: 50000
+target_update_freq: 200  # Original PyMARL value
+train_interval: 1
+num_episodes: 10000  # 3m default
+max_steps_per_episode: 400
+eval_interval: 100
+eval_episodes: 10
+eval_max_steps: 400
+checkpoint_interval: 200
+mixer_embed_dim: 32  # Original PyMARL value
+mixer_hypernet_embed: 64  # Original PyMARL value

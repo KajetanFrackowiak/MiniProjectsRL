@@ -133,16 +133,19 @@ def plot_all_envs(results_dir, env_names):
     plt.show()
 
 
-def save_metadata(
-    agent, config, seed, env_name, file_path="metadata.json", dir_name="metadata"
-):
+def save_metadata(agent, config, seed, env_name, dir_name="metadata"):
     os.makedirs(dir_name, exist_ok=True)
 
     trainable_params = 0
     non_trainable_params = 0
 
     for q_net in agent.q_networks:
-        trainable_params += np.sum(np.prod(v.shape) for v in q_net.trainable_variables)
+        trainable_params += int(
+            np.sum(np.prod(v.shape) for v in q_net.trainable_variables)
+        )
+        print(
+            f"Q-network trainable params: {np.sum(np.prod(v.shape) for v in q_net.trainable_variables)}"
+        )
         non_trainable_params += np.sum(
             np.prod(v.shape) for v in q_net.non_trainable_variables
         )
@@ -173,7 +176,7 @@ def save_metadata(
         "config": config,
     }
 
-    file_path_full = os.path.join(dir_name, file_path)
+    file_path_full = os.path.join(dir_name, f"metadata_{env_name}_seed_{seed}.json")
     with open(file_path_full, "w") as f:
         json.dump(metadata, f, indent=4, default=str)
 
@@ -184,10 +187,28 @@ def save_metadata(
 
 
 class ReplayBuffer:
-    def __init__(self, capacity, obs_shape, is_multi_agent=False):
+    def __init__(
+        self, capacity, obs_shape, is_multi_agent=False, num_agents=None, obs_dims=None
+    ):
         self.capacity = capacity
+        self.is_multi_agent = is_multi_agent
+        self.num_agents = num_agents
+        self.obs_dims = obs_dims
+
         self.obs_buf = np.zeros((capacity, *obs_shape), dtype=np.float32)
         self.next_obs_buf = np.zeros((capacity, *obs_shape), dtype=np.float32)
+
+        # For multi-agent, store individual observations
+        if is_multi_agent and num_agents is not None and obs_dims is not None:
+            self.agent_obs_buf = [
+                np.zeros((capacity, obs_dims[i]), dtype=np.float32)
+                for i in range(num_agents)
+            ]
+            self.agent_next_obs_buf = [
+                np.zeros((capacity, obs_dims[i]), dtype=np.float32)
+                for i in range(num_agents)
+            ]
+
         self.act_buf = (
             np.empty(capacity, dtype=object)
             if is_multi_agent
@@ -198,21 +219,58 @@ class ReplayBuffer:
         self.ptr = 0
         self.size = 0
 
-    def add(self, obs, next_obs, act, rew, done):
-        self.obs_buf[self.ptr] = obs
-        self.next_obs_buf[self.ptr] = next_obs
-        self.act_buf[self.ptr] = act
-        self.rew_buf[self.ptr] = rew
+    def add(
+        self,
+        state,
+        next_state,
+        actions,
+        reward,
+        done,
+        observations=None,
+        next_observations=None,
+    ):
+        self.obs_buf[self.ptr] = state
+        self.next_obs_buf[self.ptr] = next_state
+        self.act_buf[self.ptr] = actions
+        self.rew_buf[self.ptr] = reward
         self.done_buf[self.ptr] = done
+
+        # Store individual agent observations if provided
+        if observations is not None and next_observations is not None:
+            for i, (obs, next_obs) in enumerate(zip(observations, next_observations)):
+                self.agent_obs_buf[i][self.ptr] = obs
+                self.agent_next_obs_buf[i][self.ptr] = next_obs
 
         self.ptr = (self.ptr + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
 
     def sample(self, batch_size):
         idx = np.random.randint(0, self.size, size=batch_size)
+
         obs = tf.convert_to_tensor(self.obs_buf[idx], dtype=tf.float32)
         next_obs = tf.convert_to_tensor(self.next_obs_buf[idx], dtype=tf.float32)
         acts = self.act_buf[idx]
         rews = tf.convert_to_tensor(self.rew_buf[idx], dtype=tf.float32)
         dones = tf.convert_to_tensor(self.done_buf[idx], dtype=tf.float32)
+
+        # If multi-agent with stored observations, return them too
+        if self.is_multi_agent and hasattr(self, "agent_obs_buf"):
+            agent_obss = [
+                tf.convert_to_tensor(self.agent_obs_buf[i][idx], dtype=tf.float32)
+                for i in range(self.num_agents)
+            ]
+            agent_next_obss = [
+                tf.convert_to_tensor(self.agent_next_obs_buf[i][idx], dtype=tf.float32)
+                for i in range(self.num_agents)
+            ]
+            return {
+                "state": obs,
+                "next_state": next_obs,
+                "actions": acts,
+                "rewards": rews,
+                "dones": dones,
+                "observations": agent_obss,
+                "next_observations": agent_next_obss,
+            }
+
         return obs, next_obs, acts, rews, dones

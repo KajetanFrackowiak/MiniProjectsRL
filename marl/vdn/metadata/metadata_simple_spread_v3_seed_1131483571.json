@@ -1,0 +1,38 @@
+{
+    "timestamp": "2025-10-22 22:17:46",
+    "seed": 1131483571,
+    "environment": "simple_spread_v3",
+    "num_agents": 3,
+    "model_parameters": {
+        "total_parameters": 22099,
+        "trainable_parameters": 22099,
+        "non_trainable_parameters": 0,
+        "num_q_networks": 3,
+        "obs_dims": [
+            18,
+            18,
+            18
+        ],
+        "act_dim": 5,
+        "state_dim": 54
+    },
+    "config": {
+        "num_episode_simple_spread_and_speaker": 10000,
+        "num_episode_simple_adversary": 25000,
+        "num_episode_3m": 50000,
+        "num_episode_8m": 100000,
+        "num_episode_3s5z": 150000,
+        "max_cycles": 25,
+        "learning_rate": 0.0005,
+        "scheduler_frequency": 1000,
+        "alpha": 0.0001,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay": 50000,
+        "buffer_size": 100000,
+        "batch_size": 32,
+        "gamma": 0.99,
+        "tau": 0.001,
+        "checkpoint_freq": 100
+    }
+}

@@ -1,0 +1,30 @@
+# For MPE
+num_episode_simple_spread_and_speaker: 10000
+num_episode_simple_adversary: 25000
+
+# For SMAC - adjust based on episode_limit
+# If using 2M steps target: num_episodes = 2000000 / episode_limit
+num_episode_3m: 50000
+num_episode_8m: 100000
+num_episode_3s5z: 150000
+
+max_cycles: 25
+
+# Network Architecture
+learning_rate: 0.0005
+scheduler_frequency: 1000
+alpha: 0.0001
+
+# Exploration
+epsilon_start: 1.0
+epsilon_end: 0.05
+epsilon_decay: 50000
+
+# Experience Replay
+buffer_size: 100000
+batch_size: 16
+gamma: 0.99
+tau: 0.01
+
+# Checkpointing
+checkpoint_freq: 100

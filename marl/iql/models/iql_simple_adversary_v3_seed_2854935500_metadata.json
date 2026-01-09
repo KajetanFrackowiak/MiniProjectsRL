@@ -1,0 +1,25 @@
+{
+    "timestamp": "2025-12-17 18:23:35",
+    "seed": 2854935500,
+    "model_parameters": {
+        "total_params": 4101,
+        "trainable_params": 4101,
+        "non_trainable_params": 0
+    },
+    "config": {
+        "batch_size": 64,
+        "buffer_size": 100000,
+        "learning_rate": 0.0001,
+        "eta_min": 1e-06,
+        "gamma": 0.99,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.1,
+        "epsilon_decay": 500,
+        "target_update": 1,
+        "tau": 0.005,
+        "num_episodes": 1000,
+        "max_steps_per_episode": 200,
+        "eval_interval": 50,
+        "checkpoint_interval": 100
+    }
+}

@@ -1,0 +1,23 @@
+# Hyperparameters optimized for MPE environments
+# Default values work well for simple_spread_v3
+# For simple_adversary_v3: increase epsilon_decay_steps to 15000
+# For simple_speaker_listener_v4: increase epsilon_decay_steps to 30000, learning_rate to 0.0003
+
+batch_size: 32
+buffer_size: 2000
+learning_rate: 0.0001
+eta_min: 0.000001
+gamma: 0.99
+epsilon_start: 1.0
+epsilon_end: 0.05
+epsilon_decay_steps: 250000  # 5000 episodes * 50 avg steps = 250k timesteps
+target_update_freq: 100
+train_interval: 1
+num_episodes: 5000
+max_steps_per_episode: 25  # Standard MPE benchmark setting
+eval_interval: 50
+eval_episodes: 5
+eval_max_steps: 100
+checkpoint_interval: 100
+mixer_embed_dim: 32
+mixer_hypernet_embed: 64
